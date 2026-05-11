@@ -37,11 +37,12 @@ jobs:
         run: |
           set -euo pipefail
           go version -m dist/eksctl_Linux_amd64/eksctl | grep "github.com/buger/jsonparser\sv1.1.2"
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "google.golang.org/grpc\sv1.79.3"
           dist/eksctl_Linux_amd64/eksctl version
       - name: Create GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: v0.226.0-brig.1
+          TAG: v0.226.0-brig.2
         run: |
           set -euo pipefail
           gh release delete "${TAG}" --yes --cleanup-tag || true
@@ -50,6 +51,6 @@ jobs:
             dist/eksctl_Linux_arm64.tar.gz \
             dist/eksctl_checksums.txt \
             --target "${GITHUB_SHA}" \
-            --title "eksctl 0.226.0 brig.1" \
-            --notes "Temporary brig build of eksctl 0.226.0 with github.com/buger/jsonparser updated to v1.1.2." \
+            --title "eksctl 0.226.0 brig.2" \
+            --notes "Temporary brig build of eksctl 0.226.0 with github.com/buger/jsonparser updated to v1.1.2 and google.golang.org/grpc updated to v1.79.3." \
             --prerelease
