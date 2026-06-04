@@ -1,0 +1,59 @@
+name: Brig patched release
+
+on:
+  push:
+    branches:
+      - release-0.227-wiz
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.8"
+          cache: true
+      - name: Build Linux artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist/eksctl_Linux_amd64 dist/eksctl_Linux_arm64
+          git_commit="$(git rev-parse --short HEAD)"
+          build_date="$(date -u +%Y%m%dT%H%M%S)"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build -p 1 -trimpath \
+              -ldflags "-s -w -X github.com/weaveworks/eksctl/pkg/version.gitCommit=${git_commit} -X github.com/weaveworks/eksctl/pkg/version.buildDate=${build_date}" \
+              -o "dist/eksctl_Linux_${arch}/eksctl" ./cmd/eksctl
+            tar -C "dist/eksctl_Linux_${arch}" -czf "dist/eksctl_Linux_${arch}.tar.gz" eksctl
+          done
+          sha256sum dist/eksctl_Linux_*.tar.gz > dist/eksctl_checksums.txt
+      - name: Verify dependency metadata
+        run: |
+          set -euo pipefail
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "github.com/buger/jsonparser\sv1.1.2"
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "github.com/moby/spdystream\sv0.5.1"
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "google.golang.org/grpc\sv1.79.3"
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "go.opentelemetry.io/otel\sv1.41.0"
+          go version -m dist/eksctl_Linux_amd64/eksctl | grep "github.com/containerd/containerd\sv1.7.32"
+          dist/eksctl_Linux_amd64/eksctl version
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v0.227.0-brig.1
+        run: |
+          set -euo pipefail
+          gh release delete "${TAG}" --yes --cleanup-tag || true
+          gh release create "${TAG}" \
+            dist/eksctl_Linux_amd64.tar.gz \
+            dist/eksctl_Linux_arm64.tar.gz \
+            dist/eksctl_checksums.txt \
+            --target "${GITHUB_SHA}" \
+            --title "eksctl 0.227.0 brig.1" \
+            --notes "Temporary brig build of eksctl 0.227.0 with github.com/buger/jsonparser updated to v1.1.2, github.com/moby/spdystream updated to v0.5.1, google.golang.org/grpc updated to v1.79.3, go.opentelemetry.io/otel updated to v1.41.0, and github.com/containerd/containerd updated to v1.7.32." \
+            --prerelease
